@@ -12,6 +12,16 @@
 #define MAX_WAIT_TIME 86400000
 // If we have been in an updated state and want to restart, we need this amount of time to have elapsed. 
 #define RECONNECT_DELAY 300000
+// If defined, assume a serial port has been configured and we should log
+#define USE_SERIAL 1
+
+#ifdef USE_SERIAL
+#define P P
+#define PL PL
+#else
+#define P (void)0
+#define PL (void)0
+#endif
 
 /**
   * The starting state when we fetch the index page (/) and store the frkrouter cookie
@@ -147,13 +157,13 @@ class RestartStateMachine {
 
     bool canTryAgain() {
       unsigned long elapsed = millis() - lastSleep;
-      Serial.print("Can try again? elapsed=");
-      Serial.print(elapsed);
-      Serial.print(" waitTime=");
-      Serial.println(waitTime);
+      P("Can try again? elapsed=");
+      P(elapsed);
+      P(" waitTime=");
+      PL(waitTime);
 
       if (elapsed >= waitTime) {
-        Serial.println("Trying again...");
+        PL("Trying again...");
         return true;
       }
       return false;
@@ -180,8 +190,8 @@ class RestartStateMachine {
           waitTime = INITIAL_WAIT_TIME;
         }
       }
-      Serial.print("Failed! waitTime=");
-      Serial.println(waitTime);
+      P("Failed! waitTime=");
+      PL(waitTime);
     }
 
     void complete() {
@@ -191,7 +201,7 @@ class RestartStateMachine {
 
     void restart() {
       if (updated) {
-        Serial.println("Restarting...");
+        PL("Restarting...");
         successful = false;
 
         indexLoaded = false;
@@ -237,11 +247,11 @@ RestartStateMachine stateMachine;
   */
 void indexStateFunc() {
   if (fsm.executeOnce) {
-    Serial.println("Processing Index\n");
+    PL("Processing Index\n");
     String* cookie = processIndexPage(stateMachine.getClient());
     stateMachine.setFrkrouter(cookie);
     if (cookie != NULL) {
-      Serial.println("\nIndex loaded");
+      PL("\nIndex loaded");
       stateMachine.setIndexLoaded();
     }
   }
@@ -252,9 +262,9 @@ void indexStateFunc() {
   */
 void initStateFunc() {
   if (fsm.executeOnce) {
-    Serial.println("Processing Init");
+    PL("Processing Init");
     if(processInitPage(stateMachine.getClient(), stateMachine.getFrkrouter())) {
-      Serial.println("Initialized");
+      PL("Initialized");
       stateMachine.setInitialized();
     }
   }
@@ -265,9 +275,9 @@ void initStateFunc() {
   */
 void loginStateFunc() {
   if (fsm.executeOnce) {
-    Serial.println("Processing Login");
+    PL("Processing Login");
     if(processLoginPage(stateMachine.getClient(), stateMachine.getFrkrouter())) {
-      Serial.println("Logged In");
+      PL("Logged In");
       stateMachine.setLoggedIn();
     }
   }
@@ -278,9 +288,9 @@ void loginStateFunc() {
   */
 void updateStateFunc() {
   if (fsm.executeOnce) {
-    Serial.println("Processing Settings Update");
+    PL("Processing Settings Update");
     if(processSettingsUpdate(stateMachine.getClient(), stateMachine.getFrkrouter())) {
-      Serial.println("Updated");
+      PL("Updated");
       stateMachine.setUpdated();
     }
   }
@@ -290,7 +300,7 @@ void updateStateFunc() {
   * A state for sleeping/waiting to try again.
   */
 void sleepStateFunc() {
-  Serial.println("Sleeping");
+  PL("Sleeping");
 }
 
 // ###############
@@ -298,27 +308,27 @@ void sleepStateFunc() {
 // ###############
 
 bool transitionIndexToInit() {
-  Serial.print("Index -> Init: ");
-  Serial.println(stateMachine.wasIndexLoaded());
+  P("Index -> Init: ");
+  PL(stateMachine.wasIndexLoaded());
   return stateMachine.wasIndexLoaded();
 }
 
 bool transitionInitToLogin() {
-  Serial.print("Init -> Login: ");
-  Serial.println(stateMachine.wasInitialized());
+  P("Init -> Login: ");
+  PL(stateMachine.wasInitialized());
   return stateMachine.wasInitialized();
 }
 
 bool transitionLoginToUpdate() {
-  Serial.print("Login -> Update: ");
-  Serial.println(stateMachine.wasLoggedIn());
+  P("Login -> Update: ");
+  PL(stateMachine.wasLoggedIn());
   return stateMachine.wasLoggedIn();
 }
 
 bool transitionUpdateToSleep() {
   // If everything works out, mark us as successful
   if (stateMachine.wasUpdated()) {
-      Serial.println("UPDATED!");
+      PL("UPDATED!");
       stateMachine.complete();
       return true;
   }
@@ -328,19 +338,19 @@ bool transitionUpdateToSleep() {
 // All states can transition to sleep after setting successful to false
 
 bool transitionToSleep() {
-  Serial.println("Error! Sleepy time");
+  PL("Error! Sleepy time");
   stateMachine.failed();
   return true;
 }
 
 bool staySleeping() {
-  Serial.println("Sleeping...");
+  PL("Sleeping...");
   return stateMachine.isSuccessful();
 }
 
 bool tryAgain() {
   // This should factor in how long it's been since we last tried and use that to determine what to do...
-  Serial.println("Try again?");
+  PL("Try again?");
   return stateMachine.canTryAgain();
 }
 

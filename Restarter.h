@@ -7,6 +7,17 @@
 Hashtable<String, String> extractHeaders(HttpClient*  client);
 String* processSetCookieHeader(String* header);
 
+// If defined, assume a serial port has been configured and we should log
+#define USE_SERIAL 1
+
+#ifdef USE_SERIAL
+#define P P
+#define PL PL
+#else
+#define P (void)0
+#define PL (void)0
+#endif
+
 
 /**
  * Get the index page, processing the headers and returning the require cookie if 
@@ -16,8 +27,8 @@ String* processIndexPage(HttpClient* client) {
   client->get("/");
   int statusCode = client->responseStatusCode();
   if (statusCode != 200) {
-    Serial.print("Unable to fetch index. statusCode=");
-    Serial.println(statusCode);
+    P("Unable to fetch index. statusCode=");
+    PL(statusCode);
     return NULL;
   }
   Hashtable<String, String> headers = extractHeaders(client);
@@ -43,8 +54,8 @@ bool processInitPage(HttpClient* client, String* cookie) {
 
   int statusCode = client->responseStatusCode();
   if (statusCode != 200) {
-    Serial.print("Unable to post to init page. statusCode=");
-    Serial.println(statusCode);
+    P("Unable to post to init page. statusCode=");
+    PL(statusCode);
     return false;
   }
 
@@ -62,8 +73,8 @@ bool processLoginPage(HttpClient* client, String* cookie) {
 
   int statusCode = client->responseStatusCode();
   if (statusCode != 200) {
-    Serial.print("Unable to post to login page. statusCode=");
-    Serial.println(statusCode);
+    P("Unable to post to login page. statusCode=");
+    PL(statusCode);
     return false;
   }
 
@@ -80,8 +91,8 @@ bool processSettingsUpdate(HttpClient* client, String* cookie) {
 
   int statusCode = client->responseStatusCode();
   if (statusCode != 200) {
-    Serial.print("Unable to post to update page. statusCode=");
-    Serial.println(statusCode);
+    P("Unable to post to update page. statusCode=");
+    PL(statusCode);
     return false;
   }
 
@@ -115,9 +126,9 @@ String* processSetCookieHeader(String* header) {
 
   // String attributes = (semiIndex != -1) ? header->substring(semiIndex + 1) : "";
 
-  // Serial.println("Cookie Name: " + cookieName);
-  // Serial.println("Cookie Value: " + cookieValue);
-  // Serial.println("Attributes: " + attributes);
+  // PL("Cookie Name: " + cookieName);
+  // PL("Cookie Value: " + cookieValue);
+  // PL("Attributes: " + attributes);
   // free(header);
 
   return cookieValue;
