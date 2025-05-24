@@ -6,3 +6,8 @@ Hashtable
 StateMachine
 ArduinoJson
 LinkedList
+OneWire
+DallasTemperature
+Adafruit ADT7410
+Adafruit ADXL343
+Adafruit IO Arduino

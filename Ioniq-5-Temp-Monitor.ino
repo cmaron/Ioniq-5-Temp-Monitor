@@ -23,6 +23,10 @@
 #define P Serial.print
 #define PL Serial.println
 
+// Pins
+#define DS18B20_PIN 6
+#define TPL_DONE_PIN 5
+
 // Configure pins for Adafruit ATWINC1500 Feather
 AdafruitIO_WiFi io(IO_USERNAME, IO_KEY, WIFI_SSID, WIFI_PASS, 8,7,4,2);
 // 	void setPins(int8_t cs, int8_t irq, int8_t rst, int8_t en = -1);
@@ -41,12 +45,8 @@ AdafruitIO_WiFi io(IO_USERNAME, IO_KEY, WIFI_SSID, WIFI_PASS, 8,7,4,2);
 // Try at most 3 times before giving up
 #define RESTART_ATTEMPTS 3
 
-// If true, more logging! Though note this will not do much if deep sleep is enabled
-// as reconnected tot he serial port is... annoying.
+// If true, more logging! 
 #define DEBUG true
-
-// If true, attempt to use SleepyDog to let the chips sleep more and save power
-#define DEEP_SLEEP false
 
 /************************** The good stuff ***********************************/
 
@@ -54,9 +54,14 @@ AdafruitIO_WiFi io(IO_USERNAME, IO_KEY, WIFI_SSID, WIFI_PASS, 8,7,4,2);
 #include <Adafruit_Sensor.h>
 #include "Adafruit_ADT7410.h"
 #include <Adafruit_ADXL343.h>
-#include <Adafruit_SleepyDog.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
-float tempC, accelX, accelY, accelZ;
+float tempC, carTempC, accelX, accelY, accelZ;
+
+// DS18B20 setup
+OneWire oneWire(DS18B20_PIN);
+DallasTemperature ds18b20(&oneWire);
 
 // Create the ADT7410 temperature sensor object
 Adafruit_ADT7410 tempsensor = Adafruit_ADT7410();
@@ -65,16 +70,18 @@ Adafruit_ADT7410 tempsensor = Adafruit_ADT7410();
 Adafruit_ADXL343 accel = Adafruit_ADXL343(12345);
 
 // set up the 'temperature' feed
-AdafruitIO_Feed *huzzah_temperature = io.feed("ioniq-5.ioniq-5-temp");
+AdafruitIO_Feed *device_temperature = io.feed("ioniq-5.ioniq-5-temp");
+
+AdafruitIO_Feed *car_temperature = io.feed("ioniq-5.ioniq-5-car-temp");
 
 // set up the 'accelX' feed
-AdafruitIO_Feed *huzzah_accel_x = io.feed("ioniq-5.ioniq-5-accel-x");
+AdafruitIO_Feed *accel_x = io.feed("ioniq-5.ioniq-5-accel-x");
 
 // set up the 'accelY' feed
-AdafruitIO_Feed *huzzah_accel_y = io.feed("ioniq-5.ioniq-5-accel-y");
+AdafruitIO_Feed *accel_y = io.feed("ioniq-5.ioniq-5-accel-y");
 
 // set up the 'accelZ' feed
-AdafruitIO_Feed *huzzah_accel_z= io.feed("ioniq-5.ioniq-5-accel-z");
+AdafruitIO_Feed *accel_z = io.feed("ioniq-5.ioniq-5-accel-z");
 
 void setup()
 {
@@ -87,7 +94,8 @@ void setup()
   while (!Serial)
     ;
 
-//  Watchdog.enable(4000);
+  pinMode(TPL_DONE_PIN, OUTPUT);
+  digitalWrite(TPL_DONE_PIN, LOW);  // Keep low until we're done
 
   PL("Adafruit IO - ADT7410 + ADX343");
 
@@ -110,15 +118,11 @@ void setup()
       ;
   }
 
+  ds18b20.begin();
+
   // sensor takes 250 ms to get first readings
   delay(250);
  
-  if (DEEP_SLEEP) {
-    m2m_wifi_set_sleep_mode(M2M_PS_MANUAL, 1);
-  } else {
-    WiFi.maxLowPowerMode();
-  }
-
   setup_WIFI();
 }
 
@@ -147,44 +151,29 @@ void loop()
   P("Y: "); P(accelY); P("  ");
   P("Z: "); P(accelZ); P("  ");PL("m/s^2 ");
   
-  // Read and print out the temperature
+  // Read and print out the temperatures
   tempC = tempsensor.readTempC();
   P("Temperature: "); P(tempC); PL("C");
 
+  ds18b20.requestTemperatures();
+  carTempC = ds18b20.getTempCByIndex(0);
+  P("Car emperature: "); P(carTempC); PL("C");
+
+
   PL("Sending to Adafruit IO...");
-  huzzah_temperature->save(tempC, 0, 0, 0, 2);
-  huzzah_accel_x->save(accelX);
-  huzzah_accel_y->save(accelY);
-  huzzah_accel_z->save(accelZ);
+  device_temperature->save(tempC, 0, 0, 0, 2);
+  car_temperature->save(carTempC, 0, 0, 0, 2);
+  accel_x->save(accelX);
+  accel_y->save(accelY);
+  accel_z->save(accelZ);
+
   PL("Data sent!");
 
   P("Waiting ");P(IO_DELAY);PL(" seconds...");
 
-  sleepyTime();
-}
-
-/**
- * Take a nap until the next time we want to update
- */
-void sleepyTime() {
-  digitalWrite(LED_BUILTIN, LOW); // Show we're asleep
-
-  if (DEEP_SLEEP) {
-    USBDevice.standby();
-    Serial.flush();
-    Serial.end();
-  }
-
-  // wait IO_DELAY seconds between sends
-  for (int i = 0; i < IO_DELAY; i++) {
-    if (DEEP_SLEEP) {
-      m2m_wifi_request_sleep(1000);
-      int sleepMS = Watchdog.sleep(1000);
-    } else {
-      delay(1000);
-      PL("Slept 1000 ms...");
-    }
-  }
+  // === Signal Done to TPL5110 ===
+  digitalWrite(TPL_DONE_PIN, HIGH);  // tell timer we’re done
+  delay(100);                        // let it shut down
 }
 
 /**
@@ -227,7 +216,7 @@ void setup_WIFI() {
           WiFi.disconnect();
           while(true) {
             digitalWrite(LED_BUILTIN, HIGH);
-            Watchdog.sleep(1000);
+            delay(1000);
             digitalWrite(LED_BUILTIN, LOW);
           }
         }
