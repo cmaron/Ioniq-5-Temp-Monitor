@@ -26,13 +26,11 @@
 // If true, more logging! 
 #define DEBUG true
 // If defined, use the external DS18B20 temperature probe
-#define USE_DS18B20 1
+#define USE_DS18B20 true
 // If defined, use the TPL timer to shut off the arduino as needed
-#define USE_TPL 1 
+#define USE_TPL true
 // If defined, use the FSM to handle restarting the wifi router as needed
-#undef USE_FSM 0
-// If defined, assume a serial port has been configured and we should log
-#define USE_SERIAL 1
+#undef USE_FSM
 
 // Pins
 #define DS18B20_PIN 6
@@ -40,13 +38,8 @@
 #define TPL_DONE_PIN 5
 #endif
 
-#ifdef USE_SERIAL
 #define P Serial.print
 #define PL Serial.println
-#else
-#define P (void)0
-#define PL (void)0
-#endif
 
 #define USE_WINC1500
 #include "AdafruitIO_WiFi.h"
@@ -77,8 +70,8 @@ OneWire oneWire(DS18B20_PIN);
 DallasTemperature ds18b20(&oneWire);
 #endif
 #ifdef USE_FSM
-char serverAddress[] = "host.wokwi.internal";
-int port = 8080;
+char serverAddress[] = "192.168.0.1";
+int port = 80;
 #endif
 
 // Create the ADT7410 temperature sensor object
@@ -106,13 +99,12 @@ void setup()
 {
   pinMode(LED_BUILTIN, OUTPUT);
 
-#ifdef USE_SERIAL  // start the serial connection
-  Serial.begin(9600);
-
+  Serial.begin(115200);
+  if (Serial) {
   // wait for serial monitor to open
-  while (!Serial)
-    ;
-#endif
+    while (!Serial) ;
+    PL("Serial connected");
+  }
 #ifdef USE_TPL
   pinMode(TPL_DONE_PIN, OUTPUT);
   digitalWrite(TPL_DONE_PIN, LOW);  // Keep low until we're done
@@ -203,12 +195,22 @@ void loop()
   accel_z->save(accelZ);
 
   PL("Data sent!");
+  // Wait for the data to be uploaded
+  for (int i = 0; i < 6; i++) {
+    io.run();
+    PL("Waiting 500ms");
+    delay(500);
+  }
+
 
 #ifdef USE_TPL
   // === Signal Done to TPL5110 ===
   PL("Signaling TPL5110");
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(250);
   digitalWrite(TPL_DONE_PIN, HIGH);  // tell timer we’re done
-  delay(100);                        // let it shut down
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(500);                        // let it shut down
 #endif
 }
 
@@ -281,3 +283,14 @@ bool reset_Hotspot() {
 #endif
 }
 
+// void setup() {
+//   Serial.begin(9600);
+//   while (!Serial);
+
+//   Serial.println("lol");
+// }
+
+// void loop() {
+//   delay(1000);
+//   Serial.println("Oh");
+// }
