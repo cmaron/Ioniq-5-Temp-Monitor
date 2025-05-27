@@ -34,7 +34,6 @@
 // void loop() {
 //   HttpClient client = HttpClient(wifi, serverAddress, port);
 //   stateMachine.setClient(&client);
-//   fsm.transitionTo();
 //   fsm.run();
 
 //   Serial.println("Wait five seconds");

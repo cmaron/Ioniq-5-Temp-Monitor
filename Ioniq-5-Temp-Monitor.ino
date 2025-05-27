@@ -16,14 +16,14 @@
 #include "secrets.h"
 
 /************************** Configuration ***********************************/
-// How many seconds to wait before attempting to restart the router. 
+// How many seconds to wait before attempting to restart the router.
 #define CONNECT_TIMEOUT 15
 // The restart attempt uses backoff
 #define BACKOFF_FACTOR 1.5
 // Try at most 3 times before giving up
 #define RESTART_ATTEMPTS 3
 
-// If true, more logging! 
+// If true, more logging!
 #define DEBUG true
 // If defined, use the external DS18B20 temperature probe
 #define USE_DS18B20 true
@@ -43,9 +43,9 @@
 
 #define USE_WINC1500
 #include "AdafruitIO_WiFi.h"
-// Configure pins for Adafruit ATWINC1500 Feather
 
-AdafruitIO_WiFi io(IO_USERNAME, IO_KEY, WIFI_SSID, WIFI_PASS, 8,7,4,2);
+// Configure pins for Adafruit ATWINC1500 Feather
+AdafruitIO_WiFi io(IO_USERNAME, IO_KEY, WIFI_SSID, WIFI_PASS, 8, 7, 4, 2);
 
 /************************** The good stuff ***********************************/
 
@@ -95,168 +95,80 @@ AdafruitIO_Feed *accel_y = io.feed("ioniq-5.ioniq-5-accel-y");
 // set up the 'accelZ' feed
 AdafruitIO_Feed *accel_z = io.feed("ioniq-5.ioniq-5-accel-z");
 
-void setup()
-{
-  pinMode(LED_BUILTIN, OUTPUT);
+/************************** Custom functions ***********************************/
 
-  Serial.begin(115200);
-  if (Serial) {
-  // wait for serial monitor to open
-    while (!Serial) ;
-    PL("Serial connected");
+/**
+ * Blink the built-in led to indicate status. 
+ */
+void debugLed(int count, int duration = 200) {
+  for (int i = 0; i < count; i++) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(duration);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(duration);
   }
-#ifdef USE_TPL
-  pinMode(TPL_DONE_PIN, OUTPUT);
-  digitalWrite(TPL_DONE_PIN, LOW);  // Keep low until we're done
-#endif
-
-  PL("Adafruit IO - ADT7410 + ADX343");
-
-  /* Initialise the ADXL343 */
-  if(!accel.begin())
-  {
-    /* There was a problem detecting the ADXL343 ... check your connections */
-    PL("Ooops, no ADXL343 detected ... Check your wiring!");
-    while(1);
-  }
-
-  /* Set the range to whatever is appropriate for your project */
-  accel.setRange(ADXL343_RANGE_2_G);
-
-  /* Initialise the ADT7410 */
-  if (!tempsensor.begin())
-  {
-    PL("Couldn't find ADT7410!");
-    while (1)
-      ;
-  }
-
-#ifdef USE_DS18B20
-  ds18b20.begin();
-#endif
-  // sensors take 250 ms to get first readings
-  delay(250);
- 
-  setup_WIFI();
-
-#ifdef USE_FSM
-  setupStateMachine();
-#endif
-}
-
-void loop()
-{
-  digitalWrite(LED_BUILTIN, HIGH); // Show we're awake
-
-  setup_WIFI();
-#ifdef USE_FSM
-  HttpClient fsmClient = HttpClient(wifi, serverAddress, port);
-  stateMachine.setClient(&client);
-  fsm.transitionTo(sleepState);
-  fsm.run();
-#endif
-
-  // io.run(); is required for all sketches.
-  // it should always be present at the top of your loop
-  // function. it keeps the client connected to
-  // io.adafruit.com, and processes any incoming data.
-  io.run();
-
-   /* Get a new accel. sensor event */
-  sensors_event_t event;
-  accel.getEvent(&event);
-
-  accelX = event.acceleration.x;
-  accelY = event.acceleration.y;
-  accelZ = event.acceleration.z;
-
-  /* Display the results (acceleration is measured in m/s^2) */
-  P("X: "); P(accelX); P("  ");
-  P("Y: "); P(accelY); P("  ");
-  P("Z: "); P(accelZ); P("  ");PL("m/s^2 ");
-  
-  // Read and print out the temperatures
-  tempC = tempsensor.readTempC();
-  P("Temperature: "); P(tempC); PL("C");
-
-#ifdef USE_DS18B20
-  ds18b20.requestTemperatures();
-  carTempC = ds18b20.getTempCByIndex(0);
-  P("Car emperature: "); P(carTempC); PL("C");
-#endif
-
-  PL("Sending to Adafruit IO...");
-  device_temperature->save(tempC, 0, 0, 0, 2);
-#ifdef USE_DS18B20
-  car_temperature->save(carTempC, 0, 0, 0, 2);
-#endif
-  accel_x->save(accelX);
-  accel_y->save(accelY);
-  accel_z->save(accelZ);
-
-  PL("Data sent!");
-  // Wait for the data to be uploaded
-  for (int i = 0; i < 6; i++) {
-    io.run();
-    PL("Waiting 500ms");
-    delay(500);
-  }
-
-
-#ifdef USE_TPL
-  // === Signal Done to TPL5110 ===
-  PL("Signaling TPL5110");
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(250);
-  digitalWrite(TPL_DONE_PIN, HIGH);  // tell timer we’re done
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(500);                        // let it shut down
-#endif
 }
 
 /**
- * Ensure we have a proper wifi connection. This will attempt to restart the router if it cannot establish connection
- * after CONNECT_TIMEOUT seconds (with backoff)
+ * Setup the various sensors for measuring temperature and acceleration 
  */
-void setup_WIFI() {
-    // connect to io.adafruit.com
-  P("Connecting to Adafruit IO");
-  io.connect();
-
-  int count = 0;
-  int resetAttempts = 0;
-  int maxCount = CONNECT_TIMEOUT;
-  // wait for a connection
-  while (io.status() < AIO_CONNECTED)
-  {
-    if (DEBUG) {
-      P("\nio.status: "); 
-      P(io.status()); P(": "); P(io.statusText()); P("\n"); 
-      P("io.networkStatus: "); P(io.networkStatus()); P("\n"); 
-      P("io.mqttStatus: "); P(io.mqttStatus()); P("\n"); 
-      P("WiFi.status: "); P(WiFi.status()); P("\n");       
-    } else {
-      P(".");
+void setupSensors() {
+  if (!accel.begin()) {
+    PL("ADXL343 not found!");
+    while (true) {
+      debugLed(3);
+      delay(1000);
     }
+  }
+  accel.setRange(ADXL343_RANGE_2_G);
 
+  if (!tempsensor.begin()) {
+    PL("ADT7410 not found!");
+    while (true) {
+      debugLed(4);
+      delay(1000);
+    }
+  }
+#ifdef USE_DS18B20
+  ds18b20.begin();
+#endif
+  delay(250);
+}
+
+/**
+ * Connect to Adafruit IO 
+ */
+bool connectToAdafruitIO() {
+  io.connect();
+  int count = 0, resetAttempts = 0;
+  int maxCount = CONNECT_TIMEOUT;
+
+  while (io.status() < AIO_CONNECTED) {
+    if (DEBUG) {
+      P("\nio.status: ");
+      P(io.status());
+      P(" ");
+      P(io.statusText());
+      P("\n");
+      P("WiFi.status: ");
+      P(WiFi.status());
+      P("\n");
+    }
     delay(1000);
     count++;
 
     // If we've wated "too long" try and reset the hotspot
     if (count > maxCount) {
       count = 0;
-      if (!reset_Hotspot()) {
+      if (!resetHotspot()) {
         maxCount *= BACKOFF_FACTOR;
         resetAttempts++;
 
         if (resetAttempts > RESTART_ATTEMPTS) {
           PL("Well, we've lost and must now sleep forever");
-          WiFi.disconnect();
-          while(true) {
-            digitalWrite(LED_BUILTIN, HIGH);
-            delay(1000);
-            digitalWrite(LED_BUILTIN, LOW);
-          }
+          // TODO: Need to consider if the FSM is in use... then go from here? The logic calling this code probably needs to check
+          //       if the FSM is being used and if so do something different to let it run.
+          return false;
         }
       }
     }
@@ -265,14 +177,102 @@ void setup_WIFI() {
   // we are connected
   PL();
   PL(io.statusText());
+  PL("Connected to Adafruit IO");
+  return true;
 }
+
+/** 
+ * Fetch and store sensor data
+ */
+void collectSensorData() {
+  PL("Reading sensors...");
+  sensors_event_t event;
+  accel.getEvent(&event);
+  accelX = event.acceleration.x;
+  accelY = event.acceleration.y;
+  accelZ = event.acceleration.z;
+
+  tempC = tempsensor.readTempC();
+
+  /* Display the results (acceleration is measured in m/s^2) */
+  P("X: ");
+  P(accelX);
+  P("  ");
+  P("Y: ");
+  P(accelY);
+  P("  ");
+  P("Z: ");
+  P(accelZ);
+  P("  ");
+  PL("m/s^2 ");
+  P("Temperature: ");
+  P(tempC);
+  PL("C");
+
+#ifdef USE_DS18B20
+  ds18b20.requestTemperatures();
+  carTempC = ds18b20.getTempCByIndex(0);
+  P("Car emperature: ");
+  P(carTempC);
+  PL("C");
+#endif
+
+  PL("Done!");
+  debugLed(2);
+}
+
+/** 
+ * Transmit sensor data
+ */
+void sendSensorData() {
+  PL("Sending to Adafruit IO...");
+  device_temperature->save(tempC);
+#ifdef USE_DS18B20
+  car_temperature->save(carTempC);
+#endif
+  accel_x->save(accelX);
+  accel_y->save(accelY);
+  accel_z->save(accelZ);
+
+  for (int i = 0; i < 6; i++) {
+    io.run();
+    delay(500);
+  }
+  PL("Data sent!");
+  debugLed(2);
+}
+
+/**
+ * Handle shutdown/cleanup. This will disconnect wifi and potentially signal DONE 
+ * to the TPL5110
+ */
+void shutdown() {
+  PL("Disconnecting from Adafruit IO...");
+
+  io.wifi_disconnect();
+  delay(100);
+  debugLed(5, 100);
+
+#ifdef USE_TPL
+  PL("Signaling TPL5110 DONE");
+  debugLed(6);
+  while (1) {
+    digitalWrite(TPL_DONE_PIN, HIGH);
+    delay(1);
+    digitalWrite(TPL_DONE_PIN, LOW);
+    delay(1);
+  }
+  // delay(500);
+#endif
+}
+
 
 /**
  * Attempt to reset the wifi hotspot. This is a bit of a hefty process as we 
  * have to fake logging into the web ui and do some magic to trigger a reset 
  * of the hotspot. Tracking cookies from raw HTTP requests is old school AF.
  */
-bool reset_Hotspot() {
+bool resetHotspot() {
 #ifdef USE_FSM
   // Use the fsm from RestartStateMachine to kick off the reset process...
   stateMachine.restart();
@@ -281,6 +281,62 @@ bool reset_Hotspot() {
 #else
   return true;
 #endif
+}
+
+/************************** Main loops ***********************************/
+void setup() {
+#ifdef USE_TPL
+  pinMode(TPL_DONE_PIN, OUTPUT);
+  digitalWrite(TPL_DONE_PIN, LOW);  // Keep low until we're done
+#endif
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  Serial.begin(115200);
+  if (Serial) {
+    // wait for serial monitor to open
+    while (!Serial)
+      ;
+    PL("Serial connected");
+  }
+
+  setupSensors();
+  // setup_WIFI();
+#ifdef USE_FSM
+  setupStateMachine();
+  fsm.transitionTo(sleepState);
+#endif
+}
+
+void loop() {
+  debugLed(2);
+
+#ifdef USE_FSM
+  // If the FSM is restarting the hotspot, continue that loop
+  if (fsm.currentState != sleepState->index) {
+    debugLed(3, 500);
+    HttpClient fsmClient = HttpClient(wifi, serverAddress, port);
+    stateMachine.setClient(&client);
+    fsm.run();
+    delay(1000);
+    return;
+  }
+#endif
+
+  if (!connectToAdafruitIO()) {
+    debugLed(3, 500);
+#ifndef USE_FSM
+    // If we are not relying on the fsm, shutdown and return;
+    shutdown();
+#endif
+    return;
+  }
+
+  io.run();
+
+  collectSensorData();
+  sendSensorData();
+  debugLed(2);
+  shutdown();
 }
 
 // void setup() {
