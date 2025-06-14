@@ -115,19 +115,15 @@ void debugLed(int count, int duration = 200) {
 void setupSensors() {
   if (!accel.begin()) {
     PL("ADXL343 not found!");
-    while (true) {
-      debugLed(3);
-      delay(1000);
-    }
+    debugLed(6, 100);
+    shutdown();
   }
   accel.setRange(ADXL343_RANGE_2_G);
 
   if (!tempsensor.begin()) {
     PL("ADT7410 not found!");
-    while (true) {
-      debugLed(4);
-      delay(1000);
-    }
+    debugLed(7, 100);
+    shutdown();
   }
 #ifdef USE_DS18B20
   ds18b20.begin();
@@ -154,7 +150,7 @@ bool connectToAdafruitIO() {
       P(WiFi.status());
       P("\n");
     }
-    delay(1000);
+    delay(500);
     count++;
 
     // If we've wated "too long" try and reset the hotspot
@@ -236,7 +232,7 @@ void sendSensorData() {
 
   for (int i = 0; i < 6; i++) {
     io.run();
-    delay(500);
+    delay(250);
   }
   PL("Data sent!");
   debugLed(2);
@@ -251,18 +247,17 @@ void shutdown() {
 
   io.wifi_disconnect();
   delay(100);
-  debugLed(5, 100);
+  debugLed(2, 100);
 
 #ifdef USE_TPL
   PL("Signaling TPL5110 DONE");
-  debugLed(6);
+  debugLed(2, 100);
   while (1) {
     digitalWrite(TPL_DONE_PIN, HIGH);
-    delay(1);
+    delay(250);
     digitalWrite(TPL_DONE_PIN, LOW);
-    delay(1);
+    delay(250);
   }
-  // delay(500);
 #endif
 }
 
@@ -321,6 +316,10 @@ void loop() {
     return;
   }
 #endif
+// #ifdef USE_TPL
+//   PL("DONE pin state: ");
+//   PL(digitalRead(TPL_DONE_PIN));
+// #endif
 
   if (!connectToAdafruitIO()) {
     debugLed(3, 500);
