@@ -16,10 +16,10 @@
 #include "secrets.h"
 
 /************************** Configuration ***********************************/
-// How many seconds to wait before attempting to restart the router.
-#define CONNECT_TIMEOUT 15
+// How many attempts to wait before attempting to restart the router.
+#define CONNECT_ATTEMPTS 10
 // The restart attempt uses backoff
-#define BACKOFF_FACTOR 1.5
+#define BACKOFF_FACTOR 1.25
 // Try at most 3 times before giving up
 #define RESTART_ATTEMPTS 3
 
@@ -137,7 +137,7 @@ void setupSensors() {
 bool connectToAdafruitIO() {
   io.connect();
   int count = 0, resetAttempts = 0;
-  int maxCount = CONNECT_TIMEOUT;
+  int maxCount = CONNECT_ATTEMPTS;
 
   while (io.status() < AIO_CONNECTED) {
     if (DEBUG) {
@@ -149,12 +149,25 @@ bool connectToAdafruitIO() {
       P("WiFi.status: ");
       P(WiFi.status());
       P("\n");
+      P("count: ");
+      P(count);
+      P("\n");
+      P("maxCount: ");
+      P(maxCount);
+      P("\n");
+      P("resetAttempts: ");
+      P(resetAttempts);
+      P("\n");
     }
-    delay(500);
+    delay(250);
     count++;
 
     // If we've wated "too long" try and reset the hotspot
     if (count > maxCount) {
+#ifndef USE_FSM
+      // If we are not using the FSM, give up now.
+      return false;
+#endif
       count = 0;
       if (!resetHotspot()) {
         maxCount *= BACKOFF_FACTOR;
@@ -274,7 +287,7 @@ bool resetHotspot() {
   fsm.transitionTo(indexState);
   return true;
 #else
-  return true;
+  return false;
 #endif
 }
 
