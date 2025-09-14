@@ -22,6 +22,8 @@
 #define BACKOFF_FACTOR 1.25
 // Try at most 3 times before giving up
 #define RESTART_ATTEMPTS 3
+// Default delay for LED debug signals
+#define LED_DEBUG_DELAY 100
 
 // If true, more logging!
 #define DEBUG true
@@ -100,7 +102,7 @@ AdafruitIO_Feed *accel_z = io.feed("ioniq-5.ioniq-5-accel-z");
 /**
  * Blink the built-in led to indicate status. 
  */
-void debugLed(int count, int duration = 200) {
+void debugLed(int count, int duration = LED_DEBUG_DELAY) {
   for (int i = 0; i < count; i++) {
     digitalWrite(LED_BUILTIN, HIGH);
     delay(duration);
@@ -115,14 +117,14 @@ void debugLed(int count, int duration = 200) {
 void setupSensors() {
   if (!accel.begin()) {
     PL("ADXL343 not found!");
-    debugLed(6, 100);
+    debugLed(6);
     shutdown();
   }
   accel.setRange(ADXL343_RANGE_2_G);
 
   if (!tempsensor.begin()) {
     PL("ADT7410 not found!");
-    debugLed(7, 100);
+    debugLed(7);
     shutdown();
   }
 #ifdef USE_DS18B20
@@ -159,11 +161,12 @@ bool connectToAdafruitIO() {
       P(resetAttempts);
       P("\n");
     }
-    delay(250);
+    debugLed(2, 125);
     count++;
 
     // If we've wated "too long" try and reset the hotspot
     if (count > maxCount) {
+    debugLed(4, 50);
 #ifndef USE_FSM
       // If we are not using the FSM, give up now.
       return false;
@@ -260,11 +263,11 @@ void shutdown() {
 
   io.wifi_disconnect();
   delay(100);
-  debugLed(2, 100);
+  debugLed(2);
 
 #ifdef USE_TPL
   PL("Signaling TPL5110 DONE");
-  debugLed(2, 100);
+  debugLed(2);
   while (1) {
     digitalWrite(TPL_DONE_PIN, HIGH);
     delay(250);
@@ -335,7 +338,7 @@ void loop() {
 // #endif
 
   if (!connectToAdafruitIO()) {
-    debugLed(3, 500);
+    debugLed(3);
 #ifndef USE_FSM
     // If we are not relying on the fsm, shutdown and return;
     shutdown();
